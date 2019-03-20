@@ -16,11 +16,11 @@ struct TSingletonsConstructAction;
 
 // 一个简便强大的单例系统
 UCLASS(Transient)
-class UE4SINGLETON_API UMMPSingletons : public UBlueprintFunctionLibrary
+class UE4SINGLETON_API UEEEESingletons : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:
-	UMMPSingletons();
+	UEEEESingletons();
 
 	//////////////////////////////////////////////////////////////////////////
 	// BP
@@ -89,7 +89,7 @@ private:
 	template<typename T, typename>
 	friend struct TSingletonsConstructAction;
 
-	static UMMPSingletons* GetManager(UWorld* InWorld, bool bEnsure);
+	static UEEEESingletons* GetManager(UWorld* InWorld, bool bEnsure);
 
 	static UObject* CreateInstance(UClass* Class, const UObject* WorldContextObject);
 
@@ -112,6 +112,6 @@ struct TSingletonsConstructAction
 	static T* CustomConstruct(const UObject* WorldContextObject)
 	{
 		static_assert(std::is_same<V, void>::value, "error");
-		return UMMPSingletons::CreateInstance<T>(WorldContextObject);
+		return UEEEESingletons::CreateInstance<T>(WorldContextObject);
 	}
 };
