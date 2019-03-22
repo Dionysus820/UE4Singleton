@@ -1,24 +1,23 @@
 {
-	"FileVersion" : 3,
-	"Version" : 1,
-	"VersionName" : "0.1",
-	"FriendlyName" : "UE4Singleton",
-	"Description" : "UE4Singleton within C++ and across script",
-	"Category" : "Other",
-	"CreatedBy" : "jeffry",
-	"CreatedByURL" : "",
-	"DocsURL" : "",
-	"MarketplaceURL" : "",
-	"SupportURL" : "",
-	"EnabledByDefault" : true,
-	"CanContainContent" : true,
-	"IsBetaVersion" : false,
-	"Installed" : false,
-	"Modules" :
-	[
-        {
-            "Name": "UE4Singleton",
-            "Type": "Runtime"
-        }
-    ]
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1",
+  "FriendlyName": "UE4Singleton",
+  "Description": "UE4Singleton",
+  "Category": "Other",
+  "CreatedBy": "jeffry",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "EnabledByDefault": true,
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "UE4Singleton",
+      "Type": "Runtime"
+    }
+  ]
 }

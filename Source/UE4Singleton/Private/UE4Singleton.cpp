@@ -1,18 +1,20 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
+
 #include "UE4Singleton.h"
+#include "UObjectGlobals.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/GameEngine.h"
-#include "UObjectGlobals.h"
+#include "Engine/StreamableManager.h"
+#include "Engine/AssetManager.h"
 #include "IConsoleManager.h"
 #include "Launch/Resources/Version.h"
 
-// WITH_SERVER_CODE
 #if !UE_SERVER
 #include "UserWidget.h"
 #endif
 
-namespace MMPSingletonsManager
+namespace NamespaceUE4Singleton
 {
 static TAutoConsoleVariable<int32> SingletonsCreateMethod(TEXT("r.SingletonsCreateMethod"),
 														  0,
@@ -30,10 +32,10 @@ bool TrueOnFirstCall(const Type&)
 struct FWorldPair
 {
 	TWeakObjectPtr<UWorld> WeakWorld;
-	TWeakObjectPtr<UEEEESingletons> Manager;
+	TWeakObjectPtr<UE4Singleton> Manager;
 };
 static TArray<FWorldPair> Managers;
-static TWeakObjectPtr<UEEEESingletons>& FindOrAdd(UWorld* InWorld)
+static TWeakObjectPtr<UE4Singleton>& FindOrAdd(UWorld* InWorld)
 {
 	for (int32 i = 0; i < Managers.Num(); ++i)
 	{
@@ -119,21 +121,23 @@ static UGameInstance* FindInstance()
 	{
 		UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
 		if (GameEngine)
+		{
 #if ENGINE_MINOR_VERSION >= 21
 			Instance = GameEngine->GetWorld()->GetGameInstance();
 #else
 			Instance = GameEngine->GetGameInstance();
 #endif
+		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::FindInstance %s(%p)"),
-		   Instance ? *Instance->GetName() : TEXT("Instance"), Instance);
+	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::FindInstance %s(%p)"), Instance ? *Instance->GetName() : TEXT("Instance"),
+		   Instance);
 	return Instance;
 }
 
-}  // namespace MMPSingletonsManager
+}  // namespace NamespaceUE4Singleton
 
-UObject* UEEEESingletons::RegisterAsSingletonImpl(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist,
-												 UClass* InNativeClass)
+UObject* UE4Singleton::RegisterAsSingletonImpl(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist,
+												UClass* InNativeClass)
 {
 	check(IsValid(Object));
 	if (!ensureAlwaysMsgf(!InNativeClass || InNativeClass->IsNative() || !Object->IsA(InNativeClass),
@@ -147,15 +151,12 @@ UObject* UEEEESingletons::RegisterAsSingletonImpl(UObject* Object, const UObject
 	// skip cook and CDOs without world
 	if (IsRunningCommandlet() || (!World && Object->HasAnyFlags(RF_ClassDefaultObject)))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("UEEEESingletons::RegisterAsSingleton Error"));
+		UE_LOG(LogTemp, Warning, TEXT("UE4Singleton::RegisterAsSingleton Error"));
 		return nullptr;
 	}
-	auto ObjectClass = Object->GetClass();
-	if (!ensureAlwaysMsgf(ObjectClass->IsChildOf(AActor::StaticClass()) && (Object->GetWorld() != World),
-						  TEXT("Actor Singleton must match it's own world")))
-		return nullptr;
-
 	auto Mgr = GetManager(World, true);
+	auto ObjectClass = Object->GetClass();
+
 	UObject* LastPtr = nullptr;
 	if (!bReplaceExist)
 	{
@@ -164,7 +165,7 @@ UObject* UEEEESingletons::RegisterAsSingletonImpl(UObject* Object, const UObject
 			LastPtr = Mgr->Singletons.FindOrAdd(InNativeClass);
 		if (LastPtr)
 		{
-			UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::RegisterAsSingleton Exist %s(%p) -> %s -> %s(%p)"),
+			UE_LOG(LogTemp, Log, TEXT("UE4Singleton::RegisterAsSingleton Exist %s(%p) -> %s -> %s(%p)"),
 				   *GetTypedNameSafe(World), World, *ObjectClass->GetName(), *GetTypedNameSafe(LastPtr), LastPtr);
 			return LastPtr;
 		}
@@ -175,17 +176,19 @@ UObject* UEEEESingletons::RegisterAsSingletonImpl(UObject* Object, const UObject
 		UObject*& Ptr = Mgr->Singletons.FindOrAdd(CurClass);
 		LastPtr = Ptr;
 
+		// 替换至InNativeClass类的情况下，确保中间祖先类都没有被注册
 		ensureAlways(!bReplaceExist || !Ptr || (!InNativeClass && CurClass->IsNative()) ||
 					 InNativeClass /* == CurClass*/);
 
 		{
 			Ptr = Object;
 #if !SHIPPING_EXTERNAL
-			UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::RegisterAsSingleton %s(%p) -> %s -> %s(%p)"),
+			UE_LOG(LogTemp, Log, TEXT("UE4Singleton::RegisterAsSingleton %s(%p) -> %s -> %s(%p)"),
 				   *GetTypedNameSafe(World), World, *CurClass->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 #endif
 		}
 
+		// 直到InNativeClass类， 或者第一个Native类
 		if ((InNativeClass && CurClass == InNativeClass) || (!InNativeClass && CurClass->IsNative()))
 			break;
 	}
@@ -193,8 +196,8 @@ UObject* UEEEESingletons::RegisterAsSingletonImpl(UObject* Object, const UObject
 	return LastPtr;
 }
 
-UObject* UEEEESingletons::GetSingletonImpl(UClass* Class, const UObject* WorldContextObject, bool bCreate,
-										  UClass* RegClass)
+UObject* UE4Singleton::GetSingletonImpl(UClass* Class, const UObject* WorldContextObject, bool bCreate,
+										 UClass* RegClass)
 {
 	check(Class);
 	if (!RegClass)
@@ -204,7 +207,7 @@ UObject* UEEEESingletons::GetSingletonImpl(UClass* Class, const UObject* WorldCo
 	auto Mgr = GetManager(World, bCreate);
 	UObject*& Ptr = Mgr->Singletons.FindOrAdd(RegClass);
 #if 0
-	UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::GetSingleton %s(%p) -> %s -> %s(%p)"),
+	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::GetSingleton %s(%p) -> %s -> %s(%p)"),
 		*GetTypedNameSafe(World), World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 
 #endif
@@ -212,9 +215,9 @@ UObject* UEEEESingletons::GetSingletonImpl(UClass* Class, const UObject* WorldCo
 	{
 		if (!IsValid(Ptr) && bCreate)
 		{
-			Ptr = CreateInstance(Class, World);
+			Ptr = CreateInstanceImpl(World, Class);
 #if !SHIPPING_EXTERNAL
-			UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::NewSingleton %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World),
+			UE_LOG(LogTemp, Log, TEXT("UE4Singleton::NewSingleton %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World),
 				   World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 
 #endif
@@ -232,16 +235,18 @@ UObject* UEEEESingletons::GetSingletonImpl(UClass* Class, const UObject* WorldCo
 	return Ptr;
 }
 
-UObject* UEEEESingletons::CreateInstance(UClass* Class, const UObject* WorldContextObject)
+UObject* UE4Singleton::CreateInstanceImpl(const UObject* WorldContextObject, UClass* Class)
 {
+	check(Class);
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	UObject* Ptr = nullptr;
 	bool bIsActorClass = Class->IsChildOf(AActor::StaticClass());
 	if (!World)
 	{
+		// World都没有,创建不了Actor类！！
 		ensureAlways(!bIsActorClass);
-		auto Instance = MMPSingletonsManager::FindInstance();
-		if (ensure(Instance) && MMPSingletonsManager::SingletonsCreateMethod.GetValueOnGameThread() == 0)
+		auto Instance = NamespaceUE4Singleton::FindInstance();
+		if (ensure(Instance) && NamespaceUE4Singleton::SingletonsCreateMethod.GetValueOnGameThread() == 0)
 		{
 			Ptr = NewObject<UObject>(Instance, Class);
 		}
@@ -269,40 +274,77 @@ UObject* UEEEESingletons::CreateInstance(UClass* Class, const UObject* WorldCont
 	}
 	ensureAlways(Ptr);
 #if !SHIPPING_EXTERNAL
-	UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::CreateInstance %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World), World,
-		   *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
+	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::CreateInstanceImpl %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World),
+		   World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 #endif
 	return Ptr;
 }
 
-UEEEESingletons::UEEEESingletons()
+UE4Singleton::UE4Singleton()
 {
-	if (MMPSingletonsManager::TrueOnFirstCall([] {}))
+	if (NamespaceUE4Singleton::TrueOnFirstCall([] {}))
 	{
 		// GEngine->OnWorldAdded().AddLambda();
 		// GEngine->OnWorldDestroyed().AddLambda();
 		FWorldDelegates::OnWorldCleanup.AddLambda(
 			[](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
-				MMPSingletonsManager::Remove(World);
+				NamespaceUE4Singleton::Remove(World);
 			});
 
 		// 	FWorldDelegates::OnPreWorldInitialization.AddLambda(
-		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { UEEEESingletons::GetManager(Wrold); });
+		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { UE4Singleton::GetManager(Wrold); });
 	}
 }
 
-UEEEESingletons* UEEEESingletons::GetManager(UWorld* World, bool bEnsure)
+TSharedPtr<class FStreamableHandle> UE4Singleton::AsyncLoad(const FString& InPath,
+															 FStreamableAsyncObjectDelegate DelegateCallback,
+															 bool bSkipInvalid, TAsyncLoadPriority Priority)
+{
+	auto& StreamableMgr = UAssetManager::GetStreamableManager();
+	FSoftObjectPath SoftPath = InPath;
+	return UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		SoftPath, FStreamableDelegate::CreateLambda([bSkipInvalid, Cb{MoveTemp(DelegateCallback)}, SoftPath] {
+			auto* Obj = SoftPath.ResolveObject();
+			if (!bSkipInvalid || Obj)
+				Cb.ExecuteIfBound(Obj);
+		}),
+		Priority, true
+#if UE_BUILD_DEBUG
+		,
+		false, FString::Printf(TEXT("RequestAsyncLoad [%s]"), *InPath)
+#endif
+	);
+}
+
+bool UE4Singleton::AsyncCreate(const UObject* BindedObject, const FString& InPath, FStreamableAsyncObjectDelegate Cb)
+{
+	FWeakObjectPtr WeakObj = BindedObject;
+	auto Lambda = [WeakObj, Cb{MoveTemp(Cb)}](UObject* ResolvedObj) {
+		auto ResolvedClass = Cast<UClass>(ResolvedObj);
+		UObject* Obj = CreateInstanceImpl(WeakObj.Get(), ResolvedClass);
+		Cb.ExecuteIfBound(Obj);
+	};
+
+	auto Handle =
+		UE4Singleton::AsyncLoad(InPath,
+								 BindedObject ? FStreamableAsyncObjectDelegate::CreateLambda(BindedObject, Lambda)
+											  : FStreamableAsyncObjectDelegate::CreateLambda(Lambda));
+
+	return Handle.IsValid();
+}
+
+UE4Singleton* UE4Singleton::GetManager(UWorld* World, bool bEnsure)
 {
 	// FIXME how PIE work? destory duration?
 	check(!World || IsValid(World));
-	auto& Ptr = MMPSingletonsManager::FindOrAdd(World);
+	auto& Ptr = NamespaceUE4Singleton::FindOrAdd(World);
 	if (!Ptr.IsValid())
 	{
 		if (!World)
 		{
-			auto Instance = MMPSingletonsManager::FindInstance();
-			ensureMsgf(!bEnsure || Instance != nullptr, TEXT("MMPSingletonsManager::FindInstance Error"));
-			auto Obj = NewObject<UEEEESingletons>();
+			auto Instance = NamespaceUE4Singleton::FindInstance();
+			ensureMsgf(!bEnsure || Instance != nullptr, TEXT("NamespaceUE4Singleton::FindInstance Error"));
+			auto Obj = NewObject<UE4Singleton>();
 			Ptr = Obj;
 			if (Instance)
 			{
@@ -315,12 +357,12 @@ UEEEESingletons* UEEEESingletons::GetManager(UWorld* World, bool bEnsure)
 		}
 		else
 		{
-			auto Obj = NewObject<UEEEESingletons>(World);
+			auto Obj = NewObject<UE4Singleton>(World);
 			Ptr = Obj;
 			World->ExtraReferencedObjects.AddUnique(Obj);
 		}
 #if !SHIPPING_EXTERNAL
-		UE_LOG(LogTemp, Log, TEXT("UEEEESingletons::NewManager %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World,
+		UE_LOG(LogTemp, Log, TEXT("UE4Singleton::NewManager %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World,
 			   *GetTypedNameSafe(Ptr.Get()), Ptr.Get());
 #endif
 		check(Ptr.IsValid());
@@ -329,7 +371,6 @@ UEEEESingletons* UEEEESingletons::GetManager(UWorld* World, bool bEnsure)
 }
 
 #include "Modules/ModuleInterface.h"
-#include "Modules/ModuleManager.h"
 
 class FUE4SingletonPlugin final : public IModuleInterface
 {
