@@ -12,6 +12,7 @@ class UWorld;
 // 支持C++层的自定义
 template<typename T, typename = void>
 struct TSingletonConstructAction;
+// 	static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr);
 
 DECLARE_DELEGATE_OneParam(FStreamableAsyncObjectDelegate, class UObject*);
 
@@ -123,7 +124,14 @@ private:
 	friend struct TSingletonConstructAction;
 
 	static UE4Singleton* GetManager(UWorld* InWorld, bool bEnsure);
-	static UObject* CreateInstanceImpl(const UObject* WorldContextObject, UClass* Class);
+	static UObject* CreateInstanceImpl(const UObject* WorldContextObject, UClass* SubClass);
+	template<typename T>
+	static T* CreateInstanceImpl(const UObject* WorldContextObject, UClass* SubClass)
+	{
+		if (!SubClass || ensureAlways(SubClass->IsChildOf<T>()))
+			return (T*)UE4Singleton::CreateInstanceImpl(WorldContextObject, SubClass ? SubClass : T::StaticClass());
+		return nullptr;
+	}
 };
 
 template<typename T, typename V>
@@ -132,8 +140,6 @@ struct TSingletonConstructAction
 	static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr)
 	{
 		static_assert(std::is_same<V, void>::value, "error");
-		if (!SubClass || ensureAlways(SubClass->IsChildOf<T>()))
-			return (T*)UE4Singleton::CreateInstanceImpl(WorldContextObject, SubClass ? SubClass : T::StaticClass());
-		return nullptr;
+		return UE4Singleton::CreateInstanceImpl<T>(WorldContextObject, SubClass);
 	}
 };

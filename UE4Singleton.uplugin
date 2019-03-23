@@ -3,7 +3,7 @@
   "Version": 1,
   "VersionName": "0.1",
   "FriendlyName": "UE4Singleton",
-  "Description": "UE4Singleton",
+  "Description": "make any object a singleton with World/Instance",
   "Category": "Other",
   "CreatedBy": "jeffry",
   "CreatedByURL": "",
