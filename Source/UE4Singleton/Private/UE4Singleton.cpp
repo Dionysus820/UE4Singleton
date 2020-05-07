@@ -122,11 +122,7 @@ static UGameInstance* FindInstance()
 		UGameEngine* GameEngine = Cast<UGameEngine>(GEngine);
 		if (GameEngine)
 		{
-#if ENGINE_MINOR_VERSION >= 21
-			Instance = GameEngine->GetWorld()->GetGameInstance();
-#else
-			Instance = GameEngine->GetGameInstance();
-#endif
+			Instance = GameEngine->GameInstance;
 		}
 	}
 	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::FindInstance %s(%p)"), Instance ? *Instance->GetName() : TEXT("Instance"),
@@ -182,7 +178,7 @@ UObject* UE4Singleton::RegisterAsSingletonImpl(UObject* Object, const UObject* W
 
 		{
 			Ptr = Object;
-#if !SHIPPING_EXTERNAL
+#if !UE_BUILD_SHIPPING
 			UE_LOG(LogTemp, Log, TEXT("UE4Singleton::RegisterAsSingleton %s(%p) -> %s -> %s(%p)"),
 				   *GetTypedNameSafe(World), World, *CurClass->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 #endif
@@ -206,17 +202,12 @@ UObject* UE4Singleton::GetSingletonImpl(UClass* Class, const UObject* WorldConte
 	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	auto Mgr = GetManager(World, bCreate);
 	UObject*& Ptr = Mgr->Singletons.FindOrAdd(RegClass);
-#if 0
-	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::GetSingleton %s(%p) -> %s -> %s(%p)"),
-		*GetTypedNameSafe(World), World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
-
-#endif
 	if (!IsValid(Ptr))
 	{
 		if (!IsValid(Ptr) && bCreate)
 		{
 			Ptr = CreateInstanceImpl(World, Class);
-#if !SHIPPING_EXTERNAL
+#if !UE_BUILD_SHIPPING
 			UE_LOG(LogTemp, Log, TEXT("UE4Singleton::NewSingleton %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World),
 				   World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 
@@ -273,7 +264,7 @@ UObject* UE4Singleton::CreateInstanceImpl(const UObject* WorldContextObject, UCl
 		Ptr = World->SpawnActor<AActor>(Class);
 	}
 	ensureAlways(Ptr);
-#if !SHIPPING_EXTERNAL
+#if !UE_BUILD_SHIPPING
 	UE_LOG(LogTemp, Log, TEXT("UE4Singleton::CreateInstanceImpl %s(%p) -> %s -> %s(%p)"), *GetTypedNameSafe(World),
 		   World, *Class->GetName(), *GetTypedNameSafe(Ptr), Ptr);
 #endif
@@ -284,15 +275,10 @@ UE4Singleton::UE4Singleton()
 {
 	if (NamespaceUE4Singleton::TrueOnFirstCall([] {}))
 	{
-		// GEngine->OnWorldAdded().AddLambda();
-		// GEngine->OnWorldDestroyed().AddLambda();
 		FWorldDelegates::OnWorldCleanup.AddLambda(
 			[](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
 				NamespaceUE4Singleton::Remove(World);
 			});
-
-		// 	FWorldDelegates::OnPreWorldInitialization.AddLambda(
-		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { UE4Singleton::GetManager(Wrold); });
 	}
 }
 
@@ -361,7 +347,7 @@ UE4Singleton* UE4Singleton::GetManager(UWorld* World, bool bEnsure)
 			Ptr = Obj;
 			World->ExtraReferencedObjects.AddUnique(Obj);
 		}
-#if !SHIPPING_EXTERNAL
+#if !UE_BUILD_SHIPPING
 		UE_LOG(LogTemp, Log, TEXT("UE4Singleton::NewManager %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World,
 			   *GetTypedNameSafe(Ptr.Get()), Ptr.Get());
 #endif
